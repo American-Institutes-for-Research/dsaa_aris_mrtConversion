@@ -17,8 +17,10 @@ logger=logging.getLogger('logger')
 # dirs
 #TODO: might be nice to put this in a main function also maybe add dirs to a config file 
 # Change these:
-in_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/NCES Table Scraping - MT_MRT' # sharepoint location 
-out_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/MRT_JSON' # write location
+in_dir = '/Users/gchickering/OneDrive - American Institutes for Research in the Behavioral Sciences/Github/mrt_to_JSON/MT_MRT'
+out_dir = '/Users/gchickering/OneDrive - American Institutes for Research in the Behavioral Sciences/Github/mrt_to_JSON/GC_JSON'
+#in_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/NCES Table Scraping - MT_MRT' # sharepoint location 
+#out_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/MRT_JSON' # write location
 
 # classes and helpers -----------------------------------------------------------------------------------------------
 
@@ -27,8 +29,42 @@ class mrtConvert:
         self.excel = excel           
     json = None
 
-    def processXLSX(self):
+    def convertColumnTypes(self):
+        new_dict = self.json
+       # print(new_dict['meta'])
+        for row in range(0,len(new_dict['meta'])): # data 
+            for key in new_dict['meta']:
+                if key == 'digest_table_id':
+                    value= new_dict['meta'][key]
+                    value = str(value)
+                    new_dict['meta'][key]= value
+                if key == 'general_note':
+                    value = new_dict['meta'][key]
+                    value = str(value)
+                    value= value.encode("ascii", "ignore")
+                    value=value.decode()
+                    #value = value.replace("\u2019", '')
+                    new_dict['meta'][key]= value
 
+
+        for row in range(0,len(new_dict['data'])): # data 
+            new_dict['data'][row] = {k: v for k, v in new_dict['data'][row].items() if not pd.isna(v)}
+            for key in new_dict['data'][row]:
+                if key == 'standard_error':
+                    value= new_dict['data'][row][key]
+                    value = str(value)
+                    new_dict['data'][row][key]= value
+                elif key == 'value':
+                    value= new_dict['data'][row][key]
+                    value = str(value)
+                    new_dict['data'][row][key]= value
+                
+
+        self.json = new_dict
+
+
+    def processXLSX(self):
+        
         # grab sheets 
         mrt_meta = self.excel['meta']
         mrt_data = self.excel['data']
@@ -41,6 +77,7 @@ class mrtConvert:
         data_col_names = [i for i in data_col_names if i not in keep_meta]
         mrt_meta = mrt_meta[mrt_meta.columns.difference(data_col_names)] # don't want data colnames in meta data 
         new_dict['meta'] = mrt_meta.to_dict(orient='index')[0]
+        #print(new_dict['meta'])
         new_dict['data'] = "null"
 
         # more column cleanup
@@ -154,6 +191,7 @@ def main():
             # round = "Round2" 
             # for Date in MRT
             for date in round_dir:
+                #print(date)
     #TODO: probably simplify some of these rules after checking with team which folders are essential 
                 if re.match('\d{4}-\d{2}-\d{2}', date):
                     # date = '2021-07-06'  
@@ -166,13 +204,23 @@ def main():
                     else:
                         pass         
                     # fore File in MRT
+                    #date_dir
                     for file in date_dir:
+                        #print(file)
                         # read mrt 
                         # file = 'MRT_333_10.xlsx'
                         print('starting', round, date, file)
                     
                         try: # skip over summary files 
-                            mrt_xlsx = pd.read_excel(os.path.join(path,file), sheet_name=None)
+                            mrt_xlsx = pd.read_excel(os.path.join(path,file), sheet_name=None, dtype= {'digest_table_id':object})
+                            mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].astype('string')
+                            mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].replace("’", "'")
+                            #print(file)
+                            if file == 'MRT_303_50.xlsx':
+                                #print("IN here")
+                                #print (mrt_xlsx['meta']["general_note"].dtype)
+                                print (mrt_xlsx['meta']["general_note"][1])
+                                print(temp)
                         except: 
                             pass 
                         # convert xl to json
@@ -180,8 +228,9 @@ def main():
                         mrt.processXLSX()
                         # check converstion
                         if(mrt.checkConversion()):
-                            logger.info('conversion for ' + round + '/' + date + '/' + file + ' suceeded')
-                            logger.info('writing to JSON')
+                            mrt.convertColumnTypes()
+                            logger.warning('conversion for ' + round + '/' + date + '/' + file + ' suceeded')
+                            logger.warning('writing to JSON')
                             
                             # write to json
     #TODO: maybe make json writing part of the class, maybe add extra AIR subdirectory 
@@ -199,7 +248,9 @@ def main():
                         else:
                             logger.warning('conversion for ' + round + '/' + date + '/' + file + ' failed')
     end = time.time()  
-    logger.warning('time in seconds='+ (end - start))
+    total = end - start
+    total = str(total)
+    logger.warning('time in seconds='+ total)
 
 
 if __name__=="__main__":
