@@ -213,14 +213,8 @@ def main():
                     
                         try: # skip over summary files 
                             mrt_xlsx = pd.read_excel(os.path.join(path,file), sheet_name=None, dtype= {'digest_table_id':object})
-                            mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].astype('string')
-                            mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].replace("’", "'")
-                            #print(file)
-                            if file == 'MRT_303_50.xlsx':
-                                #print("IN here")
-                                #print (mrt_xlsx['meta']["general_note"].dtype)
-                                print (mrt_xlsx['meta']["general_note"][1])
-                                print(temp)
+                            #mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].astype('string')
+                            #mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].replace("’", "'")
                         except: 
                             pass 
                         # convert xl to json
