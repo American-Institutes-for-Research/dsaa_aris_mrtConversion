@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import json
 import re
+import unicodedata
 
 #debuggin
 from pdb import set_trace as bp
@@ -41,10 +42,8 @@ class mrtConvert:
                 if key == 'general_note':
                     value = new_dict['meta'][key]
                     value = str(value)
-                    value= value.encode("ascii", "ignore")
-                    value=value.decode()
-                    #value = value.replace("\u2019", '')
                     new_dict['meta'][key]= value
+
 
 
         for row in range(0,len(new_dict['data'])): # data 
@@ -58,7 +57,7 @@ class mrtConvert:
                     value= new_dict['data'][row][key]
                     value = str(value)
                     new_dict['data'][row][key]= value
-                
+            
 
         self.json = new_dict
 
@@ -215,6 +214,7 @@ def main():
                             mrt_xlsx = pd.read_excel(os.path.join(path,file), sheet_name=None, dtype= {'digest_table_id':object})
                             #mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].astype('string')
                             #mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].replace("’", "'")
+                        
                         except: 
                             pass 
                         # convert xl to json
@@ -233,7 +233,7 @@ def main():
                                 os.makedirs(os.path.join(out_dir, round, date))
                             afile = open(os.path.join(write_path, file[0:-5] + '.json'), 'w') # pop off xlsx
                             try: 
-                                afile.write(json.dumps(mrt.json, indent=4, allow_nan = False))
+                                afile.write(json.dumps(mrt.json, indent=4, allow_nan = False,  ensure_ascii=False))
                             except: 
                                 logger.warning('failed to write ' + round + '/' + date + '/' + file + ' to JSON')
                                 
