@@ -8,6 +8,10 @@ import numpy as np
 import json
 import re
 import unicodedata
+import xlrd
+import openpyxl
+import xlsxwriter
+
 
 #debuggin
 from pdb import set_trace as bp
@@ -20,6 +24,7 @@ logger=logging.getLogger('logger')
 # Change these:
 in_dir = '/Users/gchickering/OneDrive - American Institutes for Research in the Behavioral Sciences/Github/mrt_to_JSON/MT_MRT'
 out_dir = '/Users/gchickering/OneDrive - American Institutes for Research in the Behavioral Sciences/Github/mrt_to_JSON/GC_JSON'
+out_dir_excel = '/Users/gchickering/OneDrive - American Institutes for Research in the Behavioral Sciences/Github/mrt_to_JSON/Excel_Conversion'
 #in_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/NCES Table Scraping - MT_MRT' # sharepoint location 
 #out_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/MRT_JSON' # write location
 
@@ -27,12 +32,14 @@ out_dir = '/Users/gchickering/OneDrive - American Institutes for Research in the
 
 class mrtConvert:
     def __init__(self, excel):
-        self.excel = excel           
+        self.excel = excel 
+        self.meta_columns = excel['meta'].columns
+        self.data_columns = excel['data'].columns  
+        print(self.meta_columns)      
     json = None
 
     def convertColumnTypes(self):
         new_dict = self.json
-       # print(new_dict['meta'])
         for row in range(0,len(new_dict['meta'])): # data 
             for key in new_dict['meta']:
                 if key == 'digest_table_id':
@@ -73,18 +80,27 @@ class mrtConvert:
         # use meta data as base dict 
         data_col_names = list(mrt_data.columns)
         keep_meta = ['digest_table_id', 'digest_table_year']
-        data_col_names = [i for i in data_col_names if i not in keep_meta]
+        keep_meta2 = ['digest_table_id', 'digest_table_year', 'digest_table_sub_id']
+        data_col_names = [i for i in data_col_names if i not in keep_meta2]
         mrt_meta = mrt_meta[mrt_meta.columns.difference(data_col_names)] # don't want data colnames in meta data 
+  
+
+        contains_deflator = False
+        if mrt_meta['deflator'].notnull().sum() != 0 :
+            dict_deflator_values = dict(zip(mrt_meta.digest_table_sub_id, mrt_meta.deflator))
+            mrt_meta= mrt_meta.drop(columns = ['deflator','digest_table_sub_id'])
+            contains_deflator = True
+
         new_dict['meta'] = mrt_meta.to_dict(orient='index')[0]
-        #print(new_dict['meta'])
         new_dict['data'] = "null"
 
         # more column cleanup
         mrt_data = mrt_data[mrt_data.columns.difference(keep_meta)]
-
+        if contains_deflator == True:
+            mrt_data["deflator"]= mrt_data['digest_table_sub_id'].map(dict_deflator_values)
+        
         # move data to meta data dict 
         new_dict['data'] = mrt_data.to_dict(orient='records')
-
         # remove nan leaves 
         for row in range(0,len(new_dict['data'])): # data 
             new_dict['data'][row] = {k: v for k, v in new_dict['data'][row].items() if not pd.isna(v)}
@@ -92,13 +108,14 @@ class mrtConvert:
 
         self.json = new_dict
 
-    def checkConversion(self):
+    def checkConversion(self, round, date, file):
 
         # seperate out meta/data
         mxl = self.excel['meta']
-        mjs = pd.DataFrame(self.json['meta'], index = [0]) 
+        mjs = pd.DataFrame(self.json['meta'], index = [0])
         xl = self.excel['data']
         js = pd.DataFrame(self.json['data'])
+
 
         #META data checks
         # edit mxl (meta data) so it meets processing assumptions if any other are missing there was a problem: 
@@ -107,13 +124,17 @@ class mrtConvert:
         # 3) remove repeated meta data row for sub_table id
 
         data_col_names = list(xl.columns)
-        data_col_names = [i for i in data_col_names if i not in ['digest_table_id', 'digest_table_year']]
+        data_col_names = [i for i in data_col_names if i not in ['digest_table_id', 'digest_table_year', 'digest_table_sub_id']]
         mxl = mxl[mxl.columns.difference(data_col_names)] # don't want data colnames in meta data 
         mxl = mxl.dropna(axis=1, how='all')
         if(len(mxl.index) > 1):
             mxl = mxl.iloc[[0]]
-  
-        
+        deflator_check = False
+        if 'deflator' in mxl :
+            dict_deflator_values = dict(zip(mxl.digest_table_sub_id, mxl.deflator))
+            mxl= mxl.drop(columns = ['deflator','digest_table_sub_id'])
+            deflator_check = True
+
         # check all columns in json are in xl 
         if(not len(mjs.columns.difference(mxl.columns)) == 0):
             logger.warning('Meta: Not all json columns are in xl. Returning False.')
@@ -138,27 +159,32 @@ class mrtConvert:
         data_col_names = [i for i in data_col_names if i not in ['digest_table_id', 'digest_table_year']]
         xl = xl[data_col_names] # don't want data colnames in meta data 
         xl = xl.dropna(axis=1, how='all')
-
+        if deflator_check == True:
+            xl["deflator"]= xl['digest_table_sub_id'].map(dict_deflator_values)
+            js["deflator"]= js['digest_table_sub_id'].map(dict_deflator_values)
+           
         # check all columns in json are in xl 
         if(not len(js.columns.difference(xl.columns)) == 0):
+            print("in here 1")
             logger.warning('Data: Not all json columns are in xl. Returning False.')
             return(False)
 
         # check all columns in xl are in json 
         if(not len(xl.columns.difference(js.columns)) == 0):
+            print("in here 2")
             logger.warning('Data: Not all json columns are in xl. Returning False.')
             return(False)
 
         # check row count 
         if(len(js.index) != len(xl.index)):
+            print("in here 3")
             logger.warning('Data: Different number of rows. Returning False.')
             return(False)
             
         # content Check
         xl = xl.reindex(sorted(xl.columns), axis=1) # sort for ording when comparing 
         js = js.reindex(sorted(js.columns), axis=1)
-        # colsum check for continuous variables 
-        # floats, these appear to typically be value and std error 
+    
         if(not all(xl.loc[:, xl.dtypes == 'float64'].sum() == js.loc[:, js.dtypes == 'float64'].sum())):
             logger.warning('Data: Floating point valuas do not match')
             logger.warning(xl.loc[:, xl.dtypes == 'float64'].sum() == js.loc[:, js.dtypes == 'float64'].sum())
@@ -173,6 +199,24 @@ class mrtConvert:
             logger.warning('Data: Obj column had difference')
             logger.warning((xl.loc[:, xl.dtypes == 'object'].fillna('999') == js.loc[:, js.dtypes == 'object'].fillna('999')).all())
             return(False)
+        #print("we got to the end")
+        
+        ##Output the convert excel files
+        os.makedirs(os.path.join(out_dir_excel, round, date), exist_ok=True)
+        converted_excel_file = out_dir_excel + "/"+ round + "/" + date +  "/converted_" + file
+
+        ##Get columns in the same order as the original file
+        mjs = mjs.reindex(columns = self.meta_columns)
+        print("mjs columns")
+        print(mjs.columns)
+        js = js.reindex(columns =self.data_columns)
+
+        ##Write to Excel file
+        Excelwriter = pd.ExcelWriter(converted_excel_file,engine="xlsxwriter")
+        mjs.to_excel(Excelwriter, sheet_name = 'meta',index=False)
+        js.to_excel(Excelwriter, sheet_name = 'data', index=False)
+        Excelwriter.save()
+        
         return(True)
 
 
@@ -205,6 +249,9 @@ def main():
                     # fore File in MRT
                     #date_dir
                     for file in date_dir:
+                        print(file)
+                        if file == ".DS_Store":
+                            continue
                         #print(file)
                         # read mrt 
                         # file = 'MRT_333_10.xlsx'
@@ -221,13 +268,16 @@ def main():
                         mrt = mrtConvert(mrt_xlsx)
                         mrt.processXLSX()
                         # check converstion
-                        if(mrt.checkConversion()):
+
+                        #excel_write_path = os.path.join(out_dir, round, date, "excel_conversion") # check if path exists
+                        #print(excel_write_path)
+                        if(mrt.checkConversion(round, date, file)):
                             mrt.convertColumnTypes()
-                            logger.warning('conversion for ' + round + '/' + date + '/' + file + ' suceeded')
-                            logger.warning('writing to JSON')
+                            #logger.warning('conversion for ' + round + '/' + date + '/' + file + ' suceeded')
+                            #logger.warning('writing to JSON')
                             
                             # write to json
-    #TODO: maybe make json writing part of the class, maybe add extra AIR subdirectory 
+                            #To do: maybe make json writing part of the class, maybe add extra AIR subdirectory 
                             write_path = os.path.join(out_dir, round, date) # check if path exists 
                             if(not os.path.isdir(write_path)):
                                 os.makedirs(os.path.join(out_dir, round, date))
