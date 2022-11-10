@@ -34,8 +34,11 @@ class mrtConvert:
     def __init__(self, excel):
         self.excel = excel 
         self.meta_columns = excel['meta'].columns
-        self.data_columns = excel['data'].columns  
-        print(self.meta_columns)      
+        self.data_columns = excel['data'].columns 
+        self.digest_table_id = excel['data']['digest_table_id']
+        self.digest_table_year = excel['data']['digest_table_year']
+
+        #print(self.meta_columns)      
     json = None
 
     def convertColumnTypes(self):
@@ -51,10 +54,17 @@ class mrtConvert:
                     value = str(value)
                     new_dict['meta'][key]= value
 
-
+        if 'digest_table_sub_id' in new_dict['meta']:
+            del new_dict['meta']['digest_table_sub_id']
+        #new_dict['meta']= new_dict['meta'].pop("digest_table_sub_id")
 
         for row in range(0,len(new_dict['data'])): # data 
             new_dict['data'][row] = {k: v for k, v in new_dict['data'][row].items() if not pd.isna(v)}
+
+            sorted_keys = sorted(new_dict['data'][row].keys())
+            new_dict['data'][row] = {key:new_dict['data'][row][key] for key in sorted_keys}
+           
+
             for key in new_dict['data'][row]:
                 if key == 'standard_error':
                     value= new_dict['data'][row][key]
@@ -64,7 +74,7 @@ class mrtConvert:
                     value= new_dict['data'][row][key]
                     value = str(value)
                     new_dict['data'][row][key]= value
-            
+
 
         self.json = new_dict
 
@@ -83,7 +93,6 @@ class mrtConvert:
         keep_meta2 = ['digest_table_id', 'digest_table_year', 'digest_table_sub_id']
         data_col_names = [i for i in data_col_names if i not in keep_meta2]
         mrt_meta = mrt_meta[mrt_meta.columns.difference(data_col_names)] # don't want data colnames in meta data 
-  
 
         contains_deflator = False
         if mrt_meta['deflator'].notnull().sum() != 0 :
@@ -207,9 +216,15 @@ class mrtConvert:
 
         ##Get columns in the same order as the original file
         mjs = mjs.reindex(columns = self.meta_columns)
-        print("mjs columns")
-        print(mjs.columns)
+        #print("mjs columns")
+        #print(mjs.columns)
         js = js.reindex(columns =self.data_columns)
+        js['digest_table_year']= self.digest_table_year
+        js['digest_table_id']=self.digest_table_id
+        
+        #self.digest_table_id = excel['data']['digest_table_id']
+        #self.digest_table_year = excel['data']['digest_table_year']
+        #print(self.digest_table_year)
 
         ##Write to Excel file
         Excelwriter = pd.ExcelWriter(converted_excel_file,engine="xlsxwriter")
@@ -268,9 +283,6 @@ def main():
                         mrt = mrtConvert(mrt_xlsx)
                         mrt.processXLSX()
                         # check converstion
-
-                        #excel_write_path = os.path.join(out_dir, round, date, "excel_conversion") # check if path exists
-                        #print(excel_write_path)
                         if(mrt.checkConversion(round, date, file)):
                             mrt.convertColumnTypes()
                             #logger.warning('conversion for ' + round + '/' + date + '/' + file + ' suceeded')
