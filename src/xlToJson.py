@@ -273,36 +273,40 @@ def main():
                         print('starting', round, date, file)
                     
                         try: # skip over summary files 
+                            #Step 1: Convert excel to dataframe
                             mrt_xlsx = pd.read_excel(os.path.join(path,file), sheet_name=None, dtype= {'digest_table_id':object})
                             #mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].astype('string')
                             #mrt_xlsx['meta']['general_note'] = mrt_xlsx['meta']['general_note'].replace("’", "'")
+                            
                         
                         except: 
                             pass 
-                        # convert xl to json
+                        # convert dataframe to class object
                         mrt = mrtConvert(mrt_xlsx)
+                        # Step 2 and 3; Convert dataframe to dictionary and save it as json
                         mrt.processXLSX()
+
                         # check converstion
-                        if(mrt.checkConversion(round, date, file)):
-                            mrt.convertColumnTypes()
-                            #logger.warning('conversion for ' + round + '/' + date + '/' + file + ' suceeded')
-                            #logger.warning('writing to JSON')
+                        # if(mrt.checkConversion(round, date, file)):
+                        #     mrt.convertColumnTypes()
+                        #     #logger.warning('conversion for ' + round + '/' + date + '/' + file + ' suceeded')
+                        #     #logger.warning('writing to JSON')
                             
-                            # write to json
-                            #To do: maybe make json writing part of the class, maybe add extra AIR subdirectory 
-                            write_path = os.path.join(out_dir, round, date) # check if path exists 
-                            if(not os.path.isdir(write_path)):
-                                os.makedirs(os.path.join(out_dir, round, date))
-                            afile = open(os.path.join(write_path, file[0:-5] + '.json'), 'w') # pop off xlsx
-                            try: 
-                                afile.write(json.dumps(mrt.json, indent=4, allow_nan = False,  ensure_ascii=False))
-                            except: 
-                                logger.warning('failed to write ' + round + '/' + date + '/' + file + ' to JSON')
+                        #     # write to json
+                        #     #To do: maybe make json writing part of the class, maybe add extra AIR subdirectory 
+                        #     write_path = os.path.join(out_dir, round, date) # check if path exists 
+                        #     if(not os.path.isdir(write_path)):
+                        #         os.makedirs(os.path.join(out_dir, round, date))
+                        #     afile = open(os.path.join(write_path, file[0:-5] + '.json'), 'w') # pop off xlsx
+                        #     try: 
+                        #         afile.write(json.dumps(mrt.json, indent=4, allow_nan = False,  ensure_ascii=False))
+                        #     except: 
+                        #         logger.warning('failed to write ' + round + '/' + date + '/' + file + ' to JSON')
                                 
-                            afile.close()
-                        # else failed conversion QC
-                        else:
-                            logger.warning('conversion for ' + round + '/' + date + '/' + file + ' failed')
+                        #     afile.close()
+                        # # else failed conversion QC
+                        # else:
+                        #     logger.warning('conversion for ' + round + '/' + date + '/' + file + ' failed')
     end = time.time()  
     total = end - start
     total = str(total)
