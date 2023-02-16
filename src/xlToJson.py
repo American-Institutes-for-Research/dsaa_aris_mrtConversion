@@ -88,10 +88,15 @@ class mrtConvert:
 
         # use meta data as base dict 
         data_col_names = list(mrt_data.columns)
-        keep_meta = ['digest_table_id', 'digest_table_year']
+        #keep_meta = ['digest_table_id', 'digest_table_year']
         keep_meta2 = ['digest_table_id', 'digest_table_year', 'digest_table_sub_id']
         data_col_names = [i for i in data_col_names if i not in keep_meta2]
         mrt_meta = mrt_meta[mrt_meta.columns.difference(data_col_names)] # don't want data colnames in meta data 
+        #data_col_names_data = list(mrt_data.columns)
+        # data_col_names_meta = list(mrt_meta.columns)
+        # keep_meta = ['digest_table_id', 'digest_table_year', 'digest_table_sub_id']
+        # data_col_names = [i for i in data_col_names_meta if i not in keep_meta]
+        # mrt_meta = mrt_meta[mrt_meta.columns.difference(data_col_names)] # don't want data colnames in meta data 
 
         contains_deflator = False
         if mrt_meta['deflator'].notnull().sum() != 0 :
@@ -103,7 +108,8 @@ class mrtConvert:
         new_dict['data'] = "null"
 
         # more column cleanup
-        mrt_data = mrt_data[mrt_data.columns.difference(keep_meta)]
+        keep_data = ['digest_table_id', 'digest_table_year']
+        mrt_data = mrt_data[mrt_data.columns.difference(keep_data)]
         if contains_deflator == True:
             mrt_data["deflator"] = mrt_data['digest_table_sub_id'].map(dict_deflator_values)
         
@@ -124,9 +130,10 @@ class mrtConvert:
         
             #Perform conversations to get rid of NA values and columns that are not in json file for meta 
             data_col_names = list(mrt_meta.columns)
-            data_col_names = [i for i in data_col_names if i in ['digest_table_sub_id','digest_table_sub_title', 'digest_table_sub_title_note','headnote']]
-            mrt_meta = mrt_meta[mrt_meta.columns.difference(data_col_names)] # don't want data colnames in meta data 
             mrt_meta = mrt_meta.dropna(axis=1, how='all')
+            data_col_names = [i for i in data_col_names if i in ['digest_table_sub_id','digest_table_sub_title', 'digest_table_sub_title_note']]
+            mrt_meta = mrt_meta[mrt_meta.columns.difference(data_col_names)] # don't want data colnames in meta data 
+            # mrt_meta = mrt_meta.dropna(axis=1, how='all')
             if(len(mrt_meta.index) > 1):
                 mrt_meta = mrt_meta.iloc[[0]]
 
@@ -140,14 +147,28 @@ class mrtConvert:
             data_col_names = list(mrt_data.columns)
             data_col_names = [i for i in data_col_names if i not in ['digest_table_id', 'digest_table_year']]
             mrt_data = mrt_data[data_col_names] # don't want data colnames in meta data 
+            mrt_data['value'] = mrt_data['value'].astype(str)
+            if "standard_error" in mrt_data.columns:
+                mrt_data['standard_error'] = mrt_data['standard_error'].astype(str)
+            
+           
+               
+
 
             #Meta Data from json file for step 5 
             json_df_meta = pd.json_normalize(json_dict, meta = ['meta'])
             json_df_meta.columns = json_df_meta.columns.str.replace(r'^meta.', '', regex=True)
             json_df_meta =json_df_meta.drop(['data'], axis = 1)
+            
 
             #Regular Data from json file
             json_df_data = pd.json_normalize(json_dict['data'])
+            if "standard_error" in json_df_data.columns:
+                json_df_data["standard_error"] = json_df_data["standard_error"].astype(str)
+            json_df_data["value"] = json_df_data["value"].astype(str)
+
+            if deflator_check == True:
+                mrt_data["deflator"] = json_df_data['deflator']
 
              #META data checks
             # edit mxl (meta data) so it meets processing assumptions if any other are missing there was a problem: 
@@ -175,6 +196,9 @@ class mrtConvert:
             # 1) no column that appears in data other than digest id and year 
             # 2) no nan columns
 
+            ##reorder columns for both dataframes so they are in the same order
+            mrt_data = mrt_data.reindex(sorted(mrt_data.columns), axis=1) # sort for ording when comparing 
+            json_df_data = json_df_data.reindex(sorted(json_df_data.columns), axis=1)
              # check all columns in json are in xl 
             if(not len(json_df_data.columns.difference(mrt_data.columns)) == 0):
                 logger.warning('Data: Not all json columns are in xl. Returning False.')
@@ -187,14 +211,17 @@ class mrtConvert:
 
             # check row count 
             if(len(json_df_data.index) != len(mrt_data.index)):
-                print("in here 3")
                 logger.warning('Data: Different number of rows. Returning False.')
                 return(False)
 
              # content Check
             mrt_data = mrt_data.reindex(sorted(mrt_data.columns), axis=1) # sort for ording when comparing 
             json_df_data = json_df_data.reindex(sorted(json_df_data.columns), axis=1)
-        
+            mrt_data = mrt_data.reset_index(drop=True)
+            json_df_data  = json_df_data.reset_index(drop=True)
+            
+            # print(mrt_data.loc[:, mrt_data.dtypes == 'float64'].columns)
+            # print(json_df_data.loc[:, json_df_data.dtypes == 'float64'].columns)
             if(not all(mrt_data.loc[:, mrt_data.dtypes == 'float64'].sum() == json_df_data.loc[:, json_df_data.dtypes == 'float64'].sum())):
                 logger.warning('Data: Floating point valuas do not match')
                 logger.warning(mrt_meta.loc[:, mrt_meta.dtypes == 'float64'].sum() == json_df_data.loc[:, json_df_data.dtypes == 'float64'].sum())
@@ -238,6 +265,7 @@ def main():
     start = time.time() # time 
 
     # for round of MRT
+    print(os.listdir(in_dir))
     for round in os.listdir(in_dir):
         if re.match('Round\d', round):
             round_dir = os.listdir(os.path.join(in_dir,round))
@@ -253,8 +281,8 @@ def main():
                         print(file)
                         if file == ".DS_Store":
                             continue
-                        # read mrt 
-                        # file = 'MRT_333_10.xlsx'
+                        # # read mrt 
+                        # # file = 'MRT_333_10.xlsx'
                         print('starting', round, date, file)
                     
                         try: # skip over summary files 
