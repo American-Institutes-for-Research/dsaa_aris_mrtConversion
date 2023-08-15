@@ -23,9 +23,9 @@ logger=logging.getLogger('logger')
 # dirs
 #TODO: might be nice to put this in a main function also maybe add dirs to a config file 
 # Change these:
-in_dir = '/Users/gchickering/OneDrive - American Institutes for Research in the Behavioral Sciences/Github/mrt_to_JSON/MT_MRT'
-out_dir = '/Users/gchickering/OneDrive - American Institutes for Research in the Behavioral Sciences/Github/mrt_to_JSON/GC_JSON'
-out_dir_excel = '/Users/gchickering/OneDrive - American Institutes for Research in the Behavioral Sciences/Github/mrt_to_JSON/Excel_Conversion'
+in_dir = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/mrt_to_JSON/MT_MRT'
+out_dir = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/mrt_to_JSON/GC_JSON'
+out_dir_excel = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/mrt_to_JSON/Excel_Conversion'
 #in_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/NCES Table Scraping - MT_MRT' # sharepoint location 
 #out_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/MRT_JSON' # write location
 
@@ -69,12 +69,15 @@ class mrtConvert:
                     value= new_dict['data'][row][key]
                     value = str(value)
                     new_dict['data'][row][key]= value
-                elif key == 'value':
+                if key == 'value':
                     value= new_dict['data'][row][key]
                     value = str(value)
                     new_dict['data'][row][key]= value
-
-
+                elif any(keyword in key for keyword in ['row_level', 'column_level']):
+                    value= new_dict['data'][row][key]
+                    value = str(value)
+                    new_dict['data'][row][key]= value
+                    
         self.json = new_dict
 
 
@@ -148,8 +151,13 @@ class mrtConvert:
             data_col_names = [i for i in data_col_names if i not in ['digest_table_id', 'digest_table_year']]
             mrt_data = mrt_data[data_col_names] # don't want data colnames in meta data 
             mrt_data['value'] = mrt_data['value'].astype(str)
+
             if "standard_error" in mrt_data.columns:
                 mrt_data['standard_error'] = mrt_data['standard_error'].astype(str)
+            
+            keywords = ['row_level', 'column_level']
+            columns_to_convert = [col for col in mrt_data.columns if any(keyword in col for keyword in keywords)]
+            mrt_data[columns_to_convert] = mrt_data[columns_to_convert].astype(str)
             
            
                
@@ -314,6 +322,7 @@ def main():
 
                         # Step 5 and 6: Convert dictionary to dataframe and Compare Dataframe from step 1 and 5
                         outcome = mrt.checkConversion(round, date, file, json_dict)
+                        
                         
                         if outcome == True:
                             continue
