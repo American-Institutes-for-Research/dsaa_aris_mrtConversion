@@ -80,7 +80,13 @@ class mrtConvert:
                 if key == 'value':
                     value= new_dict['data'][row][key]
                     value = str(value)
-                    new_dict['data'][row][key]= value
+                    if value == '†':
+                        new_dict['data'][row][key]= value
+                    elif re.match(r'\d+\.0$', value):
+                        value = re.sub(r'\.0$', '', value)
+                        new_dict['data'][row][key]= value
+                    else:
+                        new_dict['data'][row][key]= value
                 elif any(keyword in key for keyword in ['row_level', 'column_level']):
                     value= new_dict['data'][row][key]
                     value = str(value)
