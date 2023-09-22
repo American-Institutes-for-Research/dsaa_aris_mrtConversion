@@ -31,7 +31,6 @@ out_dir_excel = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/mrt
 #out_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/MRT_JSON' # write location
 
 # classes and helpers -----------------------------------------------------------------------------------------------
-
 class mrtConvert:
     def __init__(self, excel):
         self.excel = excel 
@@ -128,7 +127,21 @@ class mrtConvert:
         keep_data = ['digest_table_id', 'digest_table_year']
         mrt_data = mrt_data[mrt_data.columns.difference(keep_data)]
         if contains_deflator == True:
+            print("contains deflator")
             mrt_data["deflator"] = mrt_data['digest_table_sub_id'].map(dict_deflator_values)
+            # print(mrt_data)
+            constant = False
+            for index, row in mrt_data.iterrows():
+                constant = False
+                for column in mrt_data.columns:
+                        if mrt_data[column].dtype == 'object':
+                            cell_value = str(row[column])
+                            if 'constant' in cell_value or 'unadjusted' in cell_value:
+                                constant = True
+                if constant == False:
+                    mrt_data["deflator"] =  None
+                    
+
         
         # move data to meta data dict 
         new_dict['data'] = mrt_data.to_dict(orient='records')
@@ -190,7 +203,9 @@ class mrtConvert:
             json_df_data["value"] = json_df_data["value"].astype(str)
 
             if deflator_check == True:
-                mrt_data["deflator"] = json_df_data['deflator']
+                if 'deflator' in json_df_data.columns:
+                    mrt_data["deflator"] = json_df_data['deflator']
+               
 
              #META data checks
             # edit mxl (meta data) so it meets processing assumptions if any other are missing there was a problem: 
@@ -280,7 +295,37 @@ class mrtConvert:
 
 
 
+# Function to check if a value ends with ".0"
+def ends_with_point_zero(value):
+    if isinstance(value, str) and value.endswith(".0"):
+        return True
+    if isinstance(value, (int, float)):
+        if int(value) == value and (isinstance(value, int) or value.is_integer()):
+            return True
+    return False
 
+# Function to update values that end with ".0"
+def update_value(value):
+    if ends_with_point_zero(value):
+        if isinstance(value, float):
+            return int(value) 
+        elif isinstance(value, str):
+            value = value[:-2]
+            return value
+    return value
+
+
+# Recursive function to update values in nested dictionaries and lists
+def update_json(obj):
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            obj[key] = update_value(value)
+            update_json(value)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            obj[i] = update_value(item)
+            update_json(item)
+   
 
 # execution -----------------------------------------------------------------------------------------------
 def main():
@@ -344,10 +389,32 @@ def main():
                             logger.warning("Files are not the same, please check where issue occured")
                             break
 
+    ##QC Check to Make sure there are no ".0" values in the json files
+    for filename in os.listdir(write_path):
+    # Check if the file is a JSON file (ends with ".json")
+        if filename.endswith('.json'):
+            # Construct the full file path
+            file_path = os.path.join(write_path, filename)
+            print(file_path)
+            # Open and read the JSON file
+            with open(file_path, 'r') as json_file:
+                data = json.load(json_file)
+                
+                # Now you can work with the JSON data as needed
+                # For example, you can print it:
+                update_json(data)
+                #print(data['meta'])
+
+                # Now you can overwrite the old JSON file with the modified data
+                with open(file_path, 'w') as json_file:
+                    json.dump(data, json_file, indent=4)  # You can specify the indentation level as needed
+
     end = time.time()  
     total = end - start
     total = str(total)
     logger.warning('time in seconds='+ total)
+
+
 
 
 if __name__=="__main__":
