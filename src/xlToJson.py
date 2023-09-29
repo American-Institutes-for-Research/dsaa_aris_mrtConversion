@@ -138,6 +138,7 @@ class mrtConvert:
                             cell_value = str(row[column])
                             if 'constant' in cell_value or 'unadjusted' in cell_value:
                                 constant = True
+                                break
                 if constant == False:
                     mrt_data.loc[index, "deflator"] =  None
                     
