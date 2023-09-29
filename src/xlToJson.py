@@ -139,7 +139,7 @@ class mrtConvert:
                             if 'constant' in cell_value or 'unadjusted' in cell_value:
                                 constant = True
                 if constant == False:
-                    mrt_data["deflator"] =  None
+                    mrt_data.loc[index, "deflator"] =  None
                     
 
         
@@ -407,7 +407,7 @@ def main():
 
                 # Now you can overwrite the old JSON file with the modified data
                 with open(file_path, 'w') as json_file:
-                    json.dump(data, json_file, indent=4)  # You can specify the indentation level as needed
+                    json.dump(data, json_file, indent=4, allow_nan = False,  ensure_ascii=False)  # You can specify the indentation level as needed
 
     end = time.time()  
     total = end - start
