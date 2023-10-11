@@ -134,9 +134,9 @@ class mrtConvert:
             for index, row in mrt_data.iterrows():
                 constant = False
                 for column in mrt_data.columns:
-                        if mrt_data[column].dtype == 'object':
+                        if column =='column_level' or column == 'digest_table_sub_title' or column == "row_level" :
                             cell_value = str(row[column])
-                            if 'constant' in cell_value or 'unadjusted' in cell_value:
+                            if re.search(r'\bconstant\b', cell_value) or re.search(r'\badjusted\b', cell_value): 
                                 constant = True
                                 break
                 if constant == False:
