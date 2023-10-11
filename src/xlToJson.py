@@ -136,7 +136,7 @@ class mrtConvert:
                 for column in mrt_data.columns:
                         if column =='column_level' or column == 'digest_table_sub_title' or column == "row_level" :
                             cell_value = str(row[column])
-                            if re.search(r'\bconstant\b', cell_value) or re.search(r'\badjusted\b', cell_value): 
+                            if re.search(r'\bconstant\b', cell_value) or re.search(r'\badjusted\b', cell_value) or re.search(r'\bConstant\b', cell_value) or re.search(r'\bAdjusted\b', cell_value)  or re.search(r'\bChained\b', cell_value)  or re.search(r'\bchained\b', cell_value): 
                                 constant = True
                                 break
                 if constant == False:
