@@ -13,7 +13,8 @@ import openpyxl
 import xlsxwriter
 from pandas.io.json import json_normalize
 import re
-
+import sys
+from sortedcontainers import SortedSet
 
 #debuggin
 from pdb import set_trace as bp
@@ -24,9 +25,9 @@ logger=logging.getLogger('logger')
 # dirs
 #TODO: might be nice to put this in a main function also maybe add dirs to a config file 
 # Change these:
-in_dir = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/mrt_to_JSON/MT_MRT'
-out_dir = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/mrt_to_JSON/GC_JSON'
-out_dir_excel = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/mrt_to_JSON/Excel_Conversion'
+in_dir = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/ARIS/mrt_to_JSON/MT_MRT'
+out_dir = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/ARIS/mrt_to_JSON/GC_JSON'
+out_dir_excel = '/Users/gchickering/Library/CloudStorage/OneDrive-AIR/Github/ARIS/mrt_to_JSON/Excel_Conversion'
 #in_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/NCES Table Scraping - MT_MRT' # sharepoint location 
 #out_dir = '/Users/ebuehler/American Institutes for Research in the Behavioral Sciences/MRT_JSON' # write location
 
@@ -328,6 +329,60 @@ def update_json(obj):
             update_json(item)
    
 
+
+
+def check_keys(data_dict, level_key, max_key_value, missing_keys, extra_keys):
+    level_value = data_dict.get(level_key, '')
+    count = len(re.findall(r':::', level_value)) + 1
+    # if level_key =='row_level':
+    #     count += 1
+    
+    for i in range(count):
+        current_key = f"{level_key}_{i + 1}"
+        if current_key in data_dict:
+            #print(f"There is a '{current_key}' key in the sub-dictionary.")
+            continue
+        else:
+            #print(f"KEY MISSING: There is no '{current_key}' key in the sub-dictionary .")
+            missing_keys.add(data_dict['column_index'])
+
+    for i in range(count+1, max_key_value):
+        current_key = f"{level_key}_{i}"
+        if current_key in data_dict:
+            print(f"EXTRA KEY: There is a '{data_dict['column_index']}' extra key, '{current_key}',  key in the sub-dictionary.")
+            extra_keys.add(data_dict['column_index'])
+            
+        else:
+            continue
+            #print(f"There is no '{current_key}' key in the sub-dictionary.")
+    return missing_keys, extra_keys
+
+# QC Checks to Make sure File is behaving properly
+def qc_json(obj, filename, qc_fail_list):
+    max_key_value = 5
+    missing_keys = set()
+    extra_keys = set()
+    qc_fail = False
+    data_list = obj.get("data", [])
+    for data_dict in data_list:
+        missing_keys, extra_keys = check_keys(data_dict, 'row_level', max_key_value, missing_keys, extra_keys )
+        missing_keys, extra_keys = check_keys(data_dict, 'column_level', max_key_value, missing_keys, extra_keys )
+
+    missing_keys = SortedSet(missing_keys)
+    extra_keys = SortedSet(extra_keys)
+    if len(missing_keys) > 0:
+        print(f'Here are the keys that are missing a column or row level: {missing_keys}')
+        qc_fail = True
+    if len(extra_keys) > 0:
+        print(f'Here are the keys that have an extra column or row level: {extra_keys}')
+        qc_fail = True
+
+    if qc_fail:
+        qc_fail_list.add(filename)
+        
+    return qc_fail_list
+
+
 # execution -----------------------------------------------------------------------------------------------
 def main():
     start = time.time() # time 
@@ -391,6 +446,7 @@ def main():
                             break
 
     ##QC Check to Make sure there are no ".0" values in the json files
+    qc_fail_list = set()
     for filename in os.listdir(write_path):
     # Check if the file is a JSON file (ends with ".json")
         if filename.endswith('.json'):
@@ -404,11 +460,14 @@ def main():
                 # Now you can work with the JSON data as needed
                 # For example, you can print it:
                 update_json(data)
+                qc_fail_list = qc_json(data, filename, qc_fail_list)
                 #print(data['meta'])
 
                 # Now you can overwrite the old JSON file with the modified data
                 with open(file_path, 'w') as json_file:
                     json.dump(data, json_file, indent=4, allow_nan = False,  ensure_ascii=False)  # You can specify the indentation level as needed
+
+    print(f'Here are the files that failed the QC Check: "{SortedSet(qc_fail_list)}"')
 
     end = time.time()  
     total = end - start
